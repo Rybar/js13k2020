@@ -1,0 +1,12 @@
+game engine
+===========
+- camera-window + edge-snapping + lerp-smoothing (new)
+- sound engine (Soundbox smaller player, Sonant-X, Famitracker, lsdj)
+- gamepad support
+- ? memoize the character's position to avoid calling ALPHABET.indexOf(c) over and over
+
+build chain
+===========
+- ? replace all the global variables by arguments with default value of the IIFE (e.g. const foo = 'bar' => (foo = 'bar') => { ... })
+- ? mangle properties, and use cache names to replace all values matching an object propery that are assigned to a variable (e.g. hero.move = [], action = 'move' becomes a.b = [], c = 'move'... 'move' needs to be converted to 'b')
+
