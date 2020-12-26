@@ -3,14 +3,17 @@ function RetroBuffer(width, height){
     this.WIDTH =     width;
     this.HEIGHT =    height;
     this.PAGESIZE = this.WIDTH *  this.HEIGHT;
-    this.PAGES = 2;
+    this.PAGES = 3;
   
     this.SCREEN = 0;
+    this.PAGE_1= this.PAGESIZE;
+    this.PAGE_2= this.PAGESIZE*2;
   
     //relative drawing position and pencolor, for drawing functions that require it.
     this.cursorX = 0;
     this.cursorY = 0;
-    this.cursorColor = 22;
+    this.cursorColor = 23;
+    this.cursorColor2 = 25;
   
     //default palette index
     this.palDefault = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
@@ -96,6 +99,32 @@ function RetroBuffer(width, height){
     ]
     this.pal = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,
                32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64];
+
+    this.dither = [
+                0b1111111111111111,
+                0b1111111111110111,
+                0b1111110111110111,
+                0b1111110111110101,
+                0b1111010111110101,
+                0b1111010110110101,
+                0b1110010110110101,
+                0b1110010110100101,
+                0b1010010110100101,
+                0b1010010110100001,
+                0b1010010010100001,
+                0b1010010010100000,
+                0b1010000010100000,
+                0b1010000000100000,
+                0b1000000000100000,
+                0b1000000000000000,
+                0b0000000000000000,
+                0b1111100110011111,
+                0b0000011001100000,
+                0b1111100010001000,
+                ];
+        
+        this.pat = 0b1111111111111111;
+        
   
     this.ctx.imageSmoothingEnabled = false;
   
@@ -109,18 +138,30 @@ function RetroBuffer(width, height){
   }
   
   //--------------graphics functions----------------
-  
+ 
   RetroBuffer.prototype.clear = function clear(color = 0){
     this.ram.fill(color, this.renderTarget, this.renderTarget + this.PAGESIZE);
   }
+
+  RetroBuffer.prototype.setPen = function(color=22, color2=0, dither=0){
+    this.cursorColor = color;
+    this.cursorColor2 = color2;
+    this.pat=dither;
+  }
   
-  RetroBuffer.prototype.pset = function pset(x=cursorX, y=cursorY, color=cursorColor) { //an index from colors[], 0-63
-    
-    
-    if(x < 0 | x > this.WIDTH) return;
-    if(y < 0 | y > this.HEIGHT) return;
-    this.ram[this.renderTarget + (y|0) * this.WIDTH + (x|0)] = color|0;
-    //this.ctx.drawImage(G.img.aap64, 0, color, 1, 1, x, y, 1, 1);
+  RetroBuffer.prototype.pset = function pset(x,y, color) { 
+    color = color|this.cursorColor;
+    x = x|0;
+    y = y|0;
+    let px = (y % 4) * 4 + (x% 4);
+    let mask = this.pat & Math.pow(2, px);
+    let pcolor = mask ? color : this.cursorColor2;
+    if(pcolor == 64)return;
+    if(pcolor > 64)pcolor = 0;
+    if(x < 0 | x > this.WIDTH-1) return;
+    if(y < 0 | y > this.HEIGHT-1) return;
+
+    this.ram[this.renderTarget + y * this.WIDTH + x] = pcolor;
   }
   
   RetroBuffer.prototype.pget = function pget(x=cursorX, y=cursorY, page=0){
@@ -132,14 +173,15 @@ function RetroBuffer(width, height){
     cursorY = y;
   }
   
-  RetroBuffer.prototype.lineTo = function lineTo(x,y, color=cursorColor){
-    line(cursorX, cursorY, x, y, color);
+  RetroBuffer.prototype.lineTo = function lineTo(x,y, color){
+    color = color|this.cursorColor;
+    this.line(this.cursorX, this.cursorY, x, y, color);
     cursorX = x;
     cursorY = y;
   }
   
-  RetroBuffer.prototype.line = function line(x1, y1, x2, y2, color=cursorColor) {
-    
+  RetroBuffer.prototype.line = function line(x1, y1, x2, y2, color) {
+    color = color | this.cursorColor;
     x1 = x1|0,
     x2 = x2|0,
     y1 = y1|0,
@@ -192,7 +234,8 @@ function RetroBuffer(width, height){
   
   }
   
-  RetroBuffer.prototype.circle = function circle(xm=cursorX, ym=cursorY, r=5, color=cursorColor) {
+  RetroBuffer.prototype.circle = function circle(xm=cursorX, ym=cursorY, r=5, color) {
+    color = color|this.cursorColor;
     xm = xm|0;
     ym = ym|0;
     r = r|0;
@@ -217,7 +260,8 @@ function RetroBuffer(width, height){
     } while (x < 0);
   }
   
-  RetroBuffer.prototype.fillCircle = function fillCircle(xm, ym, r=5, color=cursorColor) {
+  RetroBuffer.prototype.fillCircle = function fillCircle(xm, ym, r=5, color) {
+    color = color|this.cursorColor;
     xm = xm|0;
     ym = ym|0;
     r = r|0;
@@ -236,7 +280,8 @@ function RetroBuffer(width, height){
     } while (x < 0);
   }
   
-  RetroBuffer.prototype.rect = function rect(x, y, w=16, h=16, color=cursorColor) {
+  RetroBuffer.prototype.rect = function rect(x, y, w=16, h=16, color) {
+    color = color|this.cursorColor;
     //let { line } = this;
     let
     x1 = x|0,
@@ -251,13 +296,14 @@ function RetroBuffer(width, height){
     this.line(x1, y1, x1, y2, color);
   }
   
-  RetroBuffer.prototype.fillRect = function fillRect(x, y, w=16, h=16, color=cursorColor) {
+  RetroBuffer.prototype.fillRect = function fillRect(x, y, w=16, h=16, color) {
+    
     let
     x1 = x|0,
     y1 = y|0,
     x2 = ( (x+w)|0 )-1,
     y2 = ((y+h)|0 )-1;
-    color = color|0;
+    color = color|this.cursorColor;
   
     var i = Math.abs(y2 - y1);
     this.line(x1, y1, x2, y1, color);
@@ -302,101 +348,40 @@ function RetroBuffer(width, height){
   }
   
   RetroBuffer.prototype.triangle = function triangle(x1, y1, x2, y2, x3, y3, color=cursorColor) {
-    line(x1,y1, x2,y2, color);
-    line(x2,y2, x3,y3, color);
-    line(x3,y3, x1,y1, color);
+    this.line(x1,y1, x2,y2, color);
+    this.line(x2,y2, x3,y3, color);
+    this.line(x3,y3, x1,y1, color);
   }
   
-  RetroBuffer.prototype.fillTriangle = function fillTriangle( x1, y1, x2, y2, x3, y3, color=cursorColor ) {
-    //Might replace with simpler line-sweep; haven't perf tested yet.
-    var canvasWidth = WIDTH;
-    // http://devmaster.net/forums/topic/1145-advanced-rasterization/
-    // 28.4 fixed-point coordinates
-    var x1 = Math.round( 16 * x1 );
-    var x2 = Math.round( 16 * x2 );
-    var x3 = Math.round( 16 * x3 );
-    var y1 = Math.round( 16 * y1 );
-    var y2 = Math.round( 16 * y2 );
-    var y3 = Math.round( 16 * y3 );
-    // Deltas
-    var dx12 = x1 - x2, dy12 = y2 - y1;
-    var dx23 = x2 - x3, dy23 = y3 - y2;
-    var dx31 = x3 - x1, dy31 = y1 - y3;
-    // Bounding rectangle
-    var minx = Math.max( ( Math.min( x1, x2, x3 ) + 0xf ) >> 4, 0 );
-    var maxx = Math.min( ( Math.max( x1, x2, x3 ) + 0xf ) >> 4, WIDTH );
-    var miny = Math.max( ( Math.min( y1, y2, y3 ) + 0xf ) >> 4, 0 );
-    var maxy = Math.min( ( Math.max( y1, y2, y3 ) + 0xf ) >> 4, HEIGHT );
-    // Block size, standard 8x8 (must be power of two)
-    var q = 8;
-    // Start in corner of 8x8 block
-    minx &= ~(q - 1);
-    miny &= ~(q - 1);
-    // Constant part of half-edge functions
-    var c1 = -dy12 * x1 - dx12 * y1;
-    var c2 = -dy23 * x2 - dx23 * y2;
-    var c3 = -dy31 * x3 - dx31 * y3;
-    // Correct for fill convention
-    if ( dy12 > 0 || ( dy12 == 0 && dx12 > 0 ) ) c1 ++;
-    if ( dy23 > 0 || ( dy23 == 0 && dx23 > 0 ) ) c2 ++;
-    if ( dy31 > 0 || ( dy31 == 0 && dx31 > 0 ) ) c3 ++;
-  
-    c1 = (c1 - 1) >> 4;
-    c2 = (c2 - 1) >> 4;
-    c3 = (c3 - 1) >> 4;
-    // Set up min/max corners
-    var qm1 = q - 1; // for convenience
-    var nmin1 = 0, nmax1 = 0;
-    var nmin2 = 0, nmax2 = 0;
-    var nmin3 = 0, nmax3 = 0;
-    if (dx12 >= 0) nmax1 -= qm1*dx12; else nmin1 -= qm1*dx12;
-    if (dy12 >= 0) nmax1 -= qm1*dy12; else nmin1 -= qm1*dy12;
-    if (dx23 >= 0) nmax2 -= qm1*dx23; else nmin2 -= qm1*dx23;
-    if (dy23 >= 0) nmax2 -= qm1*dy23; else nmin2 -= qm1*dy23;
-    if (dx31 >= 0) nmax3 -= qm1*dx31; else nmin3 -= qm1*dx31;
-    if (dy31 >= 0) nmax3 -= qm1*dy31; else nmin3 -= qm1*dy31;
-    // Loop through blocks
-    var linestep = (canvasWidth-q);
-    for ( var y0 = miny; y0 < maxy; y0 += q ) {
-      for ( var x0 = minx; x0 < maxx; x0 += q ) {
-        // Edge functions at top-left corner
-        var cy1 = c1 + dx12 * y0 + dy12 * x0;
-        var cy2 = c2 + dx23 * y0 + dy23 * x0;
-        var cy3 = c3 + dx31 * y0 + dy31 * x0;
-        // Skip block when at least one edge completely out
-        if (cy1 < nmax1 || cy2 < nmax2 || cy3 < nmax3) continue;
-        // Offset at top-left corner
-        var offset = (x0 + y0 * canvasWidth);
-        // Accept whole block when fully covered
-        if (cy1 >= nmin1 && cy2 >= nmin2 && cy3 >= nmin3) {
-          for ( var iy = 0; iy < q; iy ++ ) {
-            for ( var ix = 0; ix < q; ix ++, offset ++ ) {
-              ram[renderTarget + offset] = color;
-            }
-            offset += linestep;
-          }
-        } else { // Partially covered block
-          for ( var iy = 0; iy < q; iy ++ ) {
-            var cx1 = cy1;
-            var cx2 = cy2;
-            var cx3 = cy3;
-            for ( var ix = 0; ix < q; ix ++ ) {
-              if ( (cx1 | cx2 | cx3) >= 0 ) {
-                ram[renderTarget + offset] = color;
-              }
-              cx1 += dy12;
-              cx2 += dy23;
-              cx3 += dy31;
-              offset ++;
-            }
-            cy1 += dx12;
-            cy2 += dx23;
-            cy3 += dx31;
-            offset += linestep;
-          }
-        }
+  //from https://www-users.mat.uni.torun.pl//~wrona/3d_tutor/tri_fillers.html
+  RetroBuffer.prototype.fillTriangle = function fillTriangle( p1, p2, p3, color) {
+    color = color | this.cursorColor;
+    //sort vertices by y, top first
+    let P = [p1, p2, p3].sort((a,b) => a.y - b.y);
+    let A = P[0], B = P[1], C = P[2],
+        dx1 = 0, dx2 = 0, dx3 = 0,
+        S, E;
+    if(B.y-A.y > 0) dx1=(B.x-A.x)/(B.y-A.y);
+    if(C.y-A.y > 0) dx2=(C.x-A.x)/(C.y-A.y);
+    if(C.y-B.y > 0) dx3=(C.x-B.x)/(C.y-B.y);
+
+    S=E=A;
+    if(dx1 > dx2) {
+      for(;S.y<=B.y;S.y++,E.y++,S.x+=dx2, E.x+=dx1){
+        this.line(S.x, E.x, S.y, color);
       }
-    }
+        E=B;
+        for( ; S.y<=C.y; S.y++, E.y++, S.x+=dx2, E.x+=dx3 )
+			  horizline(S.x, S.y, E.x, S.y, color);
+	  } else {
+		  for( ; S.y<=B.y; S.y++, E.y++, S.x+=dx1, E.x+=dx2) {
+        this.line(S.x, S.y, E.x, S.y, color);
+      }
+      S=B;
+      for( ; S.y<=C.y; S.y++, E.y++, S.x+=dx3, E.x+=dx2){
+        this.line(S.x, S.y, E.x, S.y, color);
+      }
+	  }
   }
   
   RetroBuffer.prototype.imageToRam = function imageToRam(image, address) {
